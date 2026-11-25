@@ -115,16 +115,12 @@ The Euclidean distance between the ID card descriptor and the live selfie descri
 4. If only the front side is readable, scan the back side for the pincode
 5. For female AP residents (Stree Shakti eligible), capture a live passenger face
 6. face-api.js compares the live face to the ID card photo (or previous trip photo)
-7. The ML trust score is computed locally
+7.The ML trust score is computed (by the ML service, or a local fallback if it is unavailable).
 8. The ticket is issued or denied; the record is saved to SQLite and synced when online
 
 ## ML Trust Score 
 
-The trust score combines verification signals (OCR/QR confidence, face-match distance and related features) into a single value that supports the final issue/deny decision. By default a local heuristic (`mlDecisionPolicy.ts`) is used. When the optional FastAPI service is running, the model in `ml_service/` scores requests instead and can be retrained from exported records.
-
-Training and evaluation are documented in `ml_training.ipynb`.
-
-
+The trust score is predicted by an XGBoost classifier (with a scikit-learn Random Forest fallback) trained on verification features such as face-match similarity, OCR confidence, liveness score and retry behaviour. A separate endpoint flags anomalous verification attempts. The Node backend combines the model score with a rule-based heuristic (`mlDecisionPolicy.ts`) and takes the lower value, so the system stays conservative, and keeps working with the heuristic alone, when the ML service is unavailable.
 
 
 ## Running the Full Stack (with ML service)
