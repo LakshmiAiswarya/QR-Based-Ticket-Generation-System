@@ -1,5 +1,3 @@
-
-
 **QR-based ticket verification system for APSRTC's Stree Shakti free-travel scheme**
 
 An offline-first, mobile-first conductor terminal prototype. Conductors scan a passenger's Aadhaar card, verify identity with on-device face recognition, and issue or deny a ticket, all without an internet connection or any external AI API.
@@ -124,15 +122,8 @@ The trust score combines verification signals (OCR/QR confidence, face-match dis
 
 Training and evaluation are documented in `ml_training.ipynb`.
 
-| Metric | Value |
-|--------|-------|
-| Model | _fill in (e.g. Random Forest / Logistic Regression)_ |
-| Training records | _fill in_ |
-| Accuracy | _fill in_ |
-| Precision / Recall | _fill in_ |
-| Automated tests passing | _fill in_ |
 
-> Replace the placeholders with the real numbers from your notebook or the `GET /model-metrics` endpoint. Report only what you measured.
+
 
 ## Running the Full Stack (with ML service)
 
@@ -326,4 +317,3 @@ Multi-language conductor interface (Telugu and Hindi).
 ## Author
 
 **Thanubuddu Lakshmi Aiswarya**: B.Tech AI & ML, Vignan's Foundation for Science, Technology & Research
-
