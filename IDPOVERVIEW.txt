@@ -1,0 +1,384 @@
+Stree Shakti Ticket Portal — Technical Overview
+
+Last updated: April 25, 2026
+
+==================================================
+1. WHAT THIS REPOSITORY IS
+==================================================
+
+A full-stack APSRTC conductor terminal for issuing tickets under the
+Stree Shakti welfare scheme. The app is designed for field use on mobile
+devices and runs entirely offline — no external AI API is required.
+
+Core capabilities:
+
+- Aadhaar identity extraction via QR decode (jsQR) or OCR (Tesseract.js)
+- Passenger face verification via neural face recognition (face-api.js)
+- Stree Shakti eligibility check (female AP residents get free travel)
+- ML trust scoring before final ticket approval
+- Local SQLite storage with optional cloud sync
+- Training data export for ML model retraining
+
+The app enforces Aadhaar-only issuance. Non-Aadhaar documents, invalid
+photos, and low-confidence scans are rejected before a ticket is created.
+
+==================================================
+2. HIGH-LEVEL ARCHITECTURE
+==================================================
+
+Frontend (React 19 + TypeScript + Tailwind CSS):
+  App.tsx                 — main shell, toast queue, scan queue, tab state
+  components/Scanner.tsx  — QR scan, OCR fallback, biometric flow
+  components/ShiftSetup.tsx — conductor shift start/resume + selfie
+  components/Dashboard.tsx  — stats, shift history, end-shift summary
+  components/Login.tsx      — auth, settings drawer (offline/live mode)
+  components/Ticket.tsx     — ticket receipt with real QR code
+  components/Layout.tsx     — header, bottom nav, offline badge
+
+Integrated runtime:
+  server.ts               — Express + Vite dev server on port 3000
+  backend/server.ts       — split-mode Express API on port 5001
+
+Services (all run in the browser, no server required):
+  services/geminiService.ts          — OCR (Tesseract.js) + face match (face-api.js)
+  services/aadharQrService.ts        — jsQR decode + Aadhaar QR format parser
+  services/aadhaarValidationService.ts — validation rules, AP residency check
+  services/mlIssuanceService.ts      — ML trust scoring (local + optional API)
+  services/mlDecisionPolicy.ts       — local heuristic trust score fallback
+  services/storageService.ts         — localStorage + SQLite sync + CSV export
+  services/authService.ts            — conductor auth + session management
+  services/configService.ts          — API URL, offline/live mode toggle
+  services/geoService.ts             — route distance lookup
+
+Optional ML service (Python):
+  ml_service/             — FastAPI + SQLite + XGBoost/scikit-learn pipeline
+  Falls back to local scikit-learn when XGBoost native runtime is unavailable.
+  The frontend uses a local heuristic when the ML service is unreachable.
+
+==================================================
+3. SCAN PIPELINE — HOW AADHAAR DATA IS EXTRACTED
+==================================================
+
+The scan pipeline in Scanner.tsx follows this waterfall:
+
+Step 1 — QR decode (primary path, ~5 ms)
+  - Camera frame → canvas pixel buffer → jsQR library
+  - jsQR is a pure JavaScript QR decoder, no internet required
+  - Handles all 5 Aadhaar QR formats:
+      Format 1: Standard XML attributes (name="..." gender="..." pc="...")
+      Format 2: Full XML with address fields (house, street, vtc, dist, state)
+      Format 3: JSON / mAadhaar app QR ({"name":"...","pinCode":"..."})
+      Format 4: UIDAI Secure QR v2 (16+ digit numeric prefix, binary payload)
+      Format 5: KycRes / PrintLetterBioAuth XML (DigiLocker / e-Aadhaar)
+  - Covers all Aadhaar cards issued after 2015
+
+Step 2 — Tesseract.js OCR (fallback, ~2–4 seconds)
+  - Triggered when QR decode returns no result
+  - Tesseract.js v5: Google's Tesseract engine compiled to WebAssembly
+  - Runs entirely in the browser — no server, no API key
+  - Languages: English + Telugu + Hindi (covers all Aadhaar card scripts)
+  - Language data (~14 MB) fetched from CDN on first use, cached by browser
+  - Parses name, gender, and pincode from raw OCR text
+  - Returns partial data (name + gender only) if pincode not found,
+    triggering the front/back two-step scan flow
+
+Step 3 — Manual entry (last resort)
+  - Triggered when OCR confidence < 40% or Tesseract unavailable
+  - Conductor types name, gender, and pincode directly
+  - Logged as MANUAL_OFFLINE with elevated risk level (eventRiskLevel: 2)
+
+==================================================
+4. BIOMETRIC PIPELINE — HOW FACE MATCHING WORKS
+==================================================
+
+The biometric pipeline uses face-api.js, a TensorFlow.js library that
+runs three neural networks entirely in the browser.
+
+Models loaded from jsDelivr CDN (~6 MB total, cached after first load):
+  SsdMobilenetv1     — face detection (bounding box)
+  FaceLandmark68Net  — 68 facial landmark points
+  FaceRecognitionNet — 128-dimension face descriptor vector
+
+Matching algorithm:
+  1. Detect face in ID card image → compute 128-dim descriptor A
+  2. Detect face in live selfie   → compute 128-dim descriptor B
+  3. Euclidean distance(A, B) < threshold → MATCH
+
+Thresholds (Euclidean distance, lower = stricter):
+  ID_CARD:   0.55  (ID photo vs live selfie — most different conditions)
+  HISTORY:   0.50  (two live photos of same person)
+  CONDUCTOR: 0.50  (conductor re-login)
+
+Fallback (when face-api models fail to load):
+  Pixel histogram intersection similarity is used instead.
+  Less accurate but never blocks the conductor.
+  The conductor can use Manual Override if needed.
+
+Biometric capture validation (validateBiometricCapture):
+  Uses canvas pixel statistics — Laplacian variance (sharpness),
+  luminance mean (brightness), and luminance std dev (contrast).
+  Only rejects completely blank or lens-covered images.
+  Deliberately lenient in offline mode.
+
+==================================================
+5. ML TRUST SCORING
+==================================================
+
+Before every ticket is issued, an ML trust score (0–1) is computed.
+Tickets with score below 0.52 are denied.
+
+Primary path (when ml_service is running):
+  POST /api/ml/evaluate → Python FastAPI → XGBoost or scikit-learn model
+
+Fallback path (always available, no server needed):
+  services/mlDecisionPolicy.ts — local heuristic using:
+    - verification method (QR > OCR > manual)
+    - biometric confidence scores
+    - retry count and time between attempts
+    - device fingerprint entropy
+    - IP risk score
+    - geo location shift flag
+    - event risk level
+
+The fallback is used automatically when the ML service is unreachable.
+
+==================================================
+6. HOW TO RUN
+==================================================
+
+Prerequisites:
+  - Node.js 18+
+  - npm
+  - Python 3.11+ only if running ml_service
+
+No API keys required.
+
+----------------------------------
+6A. Integrated mode (recommended)
+----------------------------------
+
+Install dependencies:
+  npm install
+
+Start the app:
+  npm run dev
+
+App available at: http://localhost:3000
+
+Test login:
+  username: conductor_test
+  password: test123
+
+----------------------------------
+6B. With ML service
+----------------------------------
+
+Install ML dependencies:
+  cd ml_service
+  python -m pip install -r requirements.txt
+
+Start ML service (from project root):
+  python -m uvicorn ml_service.main:app --host 0.0.0.0 --port 8000
+
+Start app:
+  npm run dev
+
+Health checks:
+  http://localhost:3000/health
+  http://localhost:3000/api/health
+  http://localhost:8000/health
+
+----------------------------------
+6C. Split frontend/backend mode
+----------------------------------
+
+Backend terminal:
+  npm run dev:backend   → http://localhost:5001
+
+Frontend terminal:
+  npm run dev:frontend  → http://localhost:3000
+
+Vite proxies /api, /auth, /user, /records, /shifts, /shift, /health
+to http://localhost:5001.
+
+----------------------------------
+6D. Build commands
+----------------------------------
+
+  npm run lint     — TypeScript type-check
+  npm run build    — production build
+  npm run preview  — preview production build
+  npm run test     — run Vitest tests
+
+==================================================
+7. OPERATOR FLOW
+==================================================
+
+1. Login or register a conductor account.
+2. Start a shift:
+   - Enter vehicle number and driver ID
+   - Capture a conductor selfie
+   - face-api.js verifies the selfie against the stored master photo
+3. Scan Aadhaar:
+   - Point camera at QR code (auto-detected at 150ms intervals)
+   - Or press "Photo Scan" to capture and run OCR
+   - Or upload an image/PDF
+   - Or tap "Enter details manually" for damaged cards
+4. If front side only (no pincode): flip card and scan back side.
+5. For Stree Shakti eligible passengers (female, AP pincode):
+   - Capture live passenger face
+   - face-api.js compares to ID card photo (first trip) or
+     previous trip photo (returning passenger)
+6. ML trust score computed locally.
+7. Ticket issued (SUCCESS) or denied (DENIED).
+8. Record saved to localStorage + SQLite, synced to backend when online.
+
+==================================================
+8. VALIDATION POLICY
+==================================================
+
+Issuance is blocked when:
+  - Uploaded file is not an image or PDF
+  - Image does not contain an Aadhaar card
+  - OCR confidence < 40% and no QR found
+  - Back-side pincode cannot be recovered
+  - Passenger photo is blank or lens-covered
+  - Face match Euclidean distance > threshold
+  - ML trust score < 0.52
+
+Conductor-visible messages:
+  "Invalid document uploaded. Ticket issuance terminated."
+  "Invalid photo uploaded. Ticket issuance terminated."
+  "Not sufficient data. Ticket issuance terminated."
+  "QR code not detected. Use 'Enter details manually' below."
+
+Denied attempts are written to audit storage.
+
+==================================================
+9. IMPORTANT FILES
+==================================================
+
+Root:
+  App.tsx              — main shell, toast queue, scan queue, tab routing
+  server.ts            — integrated Express + Vite server on port 3000
+  package.json         — scripts and dependencies
+  index.html           — CDN scripts: Tesseract.js v5, face-api.js 0.22.2
+  README.md            — user-facing setup and run instructions
+  IDPOVERVIEW.txt      — this file
+
+Components:
+  components/Scanner.tsx      — full scan pipeline (QR, OCR, biometric)
+  components/ShiftSetup.tsx   — conductor shift start/resume + selfie
+  components/Dashboard.tsx    — stats, shift history, end-shift summary
+  components/Login.tsx        — auth, settings drawer
+  components/Ticket.tsx       — ticket receipt with QRCodeSVG
+  components/Layout.tsx       — header, bottom nav, offline badge
+
+Services:
+  services/geminiService.ts           — Tesseract.js OCR + face-api.js biometric
+  services/aadharQrService.ts         — jsQR decode + multi-format QR parser
+  services/aadhaarValidationService.ts — validation helpers, AP residency check
+  services/mlIssuanceService.ts       — ML trust scoring with local fallback
+  services/mlDecisionPolicy.ts        — local heuristic trust score
+  services/storageService.ts          — localStorage + SQLite sync + CSV export
+  services/authService.ts             — conductor auth + session
+  services/configService.ts           — API URL, offline/live mode
+  services/geoService.ts              — route distance lookup
+
+Backend:
+  backend/server.ts    — split-mode Express API on port 5001
+
+ML service:
+  ml_service/main.py           — FastAPI app entry point
+  ml_service/api/endpoints.py  — REST endpoints
+  ml_service/core/train.py     — XGBoost/scikit-learn training pipeline
+  ml_service/core/predict.py   — model loading and inference
+  ml_service/core/anomalies.py — Isolation Forest anomaly detection
+  ml_service/core/drift.py     — PSI-based feature drift detection
+  ml_service/db/models.py      — SQLAlchemy models
+
+==================================================
+10. DATA FILES
+==================================================
+
+  apsrtc_local.db                     — app SQLite database
+  ml_service/ml_service.db            — ML service SQLite database
+  exports/ticket_records_training.csv — ML training data export
+  models/                             — trained ML model artifacts (.joblib)
+
+Inspect app database:
+  sqlite3 apsrtc_local.db
+  .tables
+  SELECT * FROM ticket_records LIMIT 10;
+
+Useful backend endpoint:
+  GET /api/admin/training-sheet
+
+==================================================
+11. THIRD-PARTY LIBRARIES (CDN, NO NPM INSTALL)
+==================================================
+
+Loaded in index.html from CDN, cached by browser after first load:
+
+  Tesseract.js v5
+    URL:  https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js
+    Size: ~10 MB core WASM + ~14 MB language data (eng+tel+hin)
+    Use:  OCR fallback when QR decode fails
+
+  face-api.js 0.22.2
+    URL:  https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js
+    Models: https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/model
+    Size: ~6 MB (3 TensorFlow.js models)
+    Use:  Neural face recognition for biometric matching
+
+  html2canvas 1.4.1
+    URL:  https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js
+    Use:  Ticket download as PNG image
+
+  Tailwind CSS (CDN)
+    URL:  https://cdn.tailwindcss.com
+    Use:  Utility CSS framework
+
+==================================================
+12. TROUBLESHOOTING
+==================================================
+
+OCR slow on first scan:
+  Tesseract.js downloads ~14 MB of language data on first use.
+  Subsequent scans use the browser cache and are much faster.
+  The worker is initialised lazily on first OCR call.
+
+Face models not loading:
+  face-api.js downloads ~6 MB of TensorFlow models on first biometric check.
+  The app falls back to pixel histogram similarity until models are cached.
+  Retry the biometric step after a few seconds.
+
+Port in use:
+  lsof -i :3000
+  lsof -i :5001
+
+SQLite locked:
+  Ensure only one backend process writes to apsrtc_local.db at a time.
+
+Large production bundle warning:
+  TensorFlow.js increases the bundle size. The build succeeds and the app
+  runs correctly. The warning is non-blocking.
+
+No API key errors:
+  The app does not require any API keys. If you see a "Missing API key"
+  error, it is from an older cached version of geminiService.ts.
+  Hard-refresh the browser (Ctrl+Shift+R / Cmd+Shift+R).
+
+==================================================
+13. MAINTENANCE NOTES
+==================================================
+
+- Update README.md if startup commands or ports change.
+- Update this file if project structure changes materially.
+- Do not commit real .env secrets.
+- The Tesseract.js worker is a singleton — it is created once and reused.
+- The face-api.js models are loaded once and cached in memory.
+- The ML service is optional; the local heuristic covers all cases.
+- geminiService.ts no longer imports @google/genai. The import in
+  package.json is kept for potential future use but is not called.
+

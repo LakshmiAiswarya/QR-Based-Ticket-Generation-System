@@ -1,0 +1,500 @@
+STREE SHAKTI TICKET PORTAL - SYSTEM ARCHITECTURE & RUNBOOK
+
+============================================================
+1) System purpose
+============================================================
+The Stree Shakti Ticket Portal is a mobile-first APSRTC conductor terminal for
+issuing, denying, storing, auditing, and exporting ticket records under the
+Stree Shakti welfare flow.
+
+The system is offline-first:
+- Aadhaar QR decoding runs in the browser with jsQR.
+- OCR fallback runs in the browser with Tesseract.js.
+- Face matching runs in the browser with face-api.js/TensorFlow.js.
+- Ticket and shift records are cached in browser localStorage first.
+- The Node/Express backend persists records to SQLite when available.
+- The optional Python ML service improves trust scoring and retraining, but the
+  app can approve/deny using local heuristic policy when the service is down.
+
+Core operator flow:
+1) Conductor logs in or registers.
+2) Conductor starts a shift with driver/vehicle details and a selfie.
+3) Passenger Aadhaar is scanned through QR, OCR, upload, or manual fallback.
+4) Eligibility rules validate gender, residence, document quality, and pincode.
+5) Eligible passengers complete live face verification.
+6) ML trust decision is requested through the Node backend.
+7) Ticket is issued or denied, saved locally, persisted to SQLite, exported to
+   training CSV, and optionally sent to the ML service learning log.
+
+============================================================
+2) Runtime topology
+============================================================
+The application supports three runtime layers.
+
+------------------------------------------------------------
+2.1) Browser frontend
+------------------------------------------------------------
+Entry points:
+- index.html
+- index.tsx
+- App.tsx
+
+Responsibilities:
+- Render conductor workflow, scanner, dashboard, ticket, login, shift setup,
+  analytics, and help screens.
+- Perform local QR/OCR/face verification where possible.
+- Maintain immediate offline state in localStorage.
+- Call relative APIs such as /api/records and /api/ml/evaluate.
+- In live mode, optionally call a configured remote API base URL for cloud sync.
+
+Important frontend services:
+- services/aadharQrService.ts
+  Parses Aadhaar QR payloads from camera/upload frames.
+- services/geminiService.ts
+  Hosts local OCR and biometric helper logic despite the legacy filename.
+- services/aadhaarValidationService.ts
+  Enforces Aadhaar/document/eligibility checks.
+- services/mlIssuanceService.ts
+  Calls /api/ml/evaluate and falls back to client heuristic if unreachable.
+- services/mlDecisionPolicy.ts
+  Normalizes verification features and computes heuristic trust decisions.
+- services/storageService.ts
+  Coordinates localStorage, SQLite sync, conductor filtering, shift state, CSV
+  downloads, and optional live/cloud sync.
+- services/authService.ts
+  Handles conductor credentials/session state.
+- services/configService.ts
+  Controls live/offline mode and remote API base URL.
+
+------------------------------------------------------------
+2.2) Node/Express backend
+------------------------------------------------------------
+Two Node modes exist:
+
+A) Integrated mode:
+- Command: npm run dev
+- File: server.ts
+- Port: 3000
+- Serves Express APIs and Vite middleware from one process.
+
+B) Split mode:
+- Backend command: npm run dev:backend
+- Backend file: backend/server.ts
+- Backend port: 5001
+- Frontend command: npm run dev:frontend
+- Frontend port: 3000
+- vite.config.ts proxies /api, /auth, /user, /records, /shifts, /shift, and
+  /health to http://localhost:5001.
+
+Node backend responsibilities:
+- Initialize and migrate local SQLite tables.
+- Persist conductors, active shifts, ticket records, and activity logs.
+- Hydrate browser localStorage from SQLite on login.
+- Save ticket records from both /records and /api/records.
+- Export ticket_records to exports/ticket_records_training.csv after startup
+  and after each ticket save.
+- Proxy ML trust scoring to the optional Python ML service.
+- Apply the TypeScript heuristic guard even when a Python model returns a score.
+- Send ticket outcomes asynchronously to the ML service learning endpoint.
+- Expose audit, activity, OCR, verification, and ML metrics endpoints.
+
+------------------------------------------------------------
+2.3) Optional Python ML service
+------------------------------------------------------------
+Command:
+- cd ml_service
+- python -m uvicorn ml_service.main:app --host 0.0.0.0 --port 8000
+
+Responsibilities:
+- Predict trust_score from normalized verification features.
+- Detect anomalous verification attempts.
+- Store labeled verification events in ml_service.db.
+- Train models from both ML service logs and backend-exported CSV.
+- Persist model artifacts under models/<version>/.
+- Expose model metrics and feature importance.
+- Trigger guarded auto-retraining after new live labeled logs.
+
+The application remains usable without this service. If it is unavailable, the
+browser/Node heuristic decision path continues to operate.
+
+============================================================
+3) Technology stack
+============================================================
+Frontend:
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS/project CSS
+- lucide-react icons
+- recharts
+- qrcode.react
+
+Browser verification:
+- jsQR for QR decoding
+- Tesseract.js for OCR
+- face-api.js and TensorFlow.js models for face recognition
+
+Node backend:
+- Express 5
+- sqlite3
+- tsx for TypeScript dev execution
+- Vite middleware in integrated dev mode
+
+Python ML service:
+- FastAPI
+- SQLAlchemy
+- pandas
+- scikit-learn
+- xgboost when native dependencies are available
+- joblib
+- APScheduler
+
+Storage:
+- Browser localStorage for offline records, usage counters, active shift, and
+  shift history.
+- Node SQLite database: ./apsrtc_local.db by default.
+- ML SQLite database: ml_service/ml_service.db by default.
+- Training export: exports/ticket_records_training.csv.
+- Model artifacts: models/<UTC version>/model.joblib or model.bst.
+
+============================================================
+4) Data architecture
+============================================================
+------------------------------------------------------------
+4.1) Browser localStorage
+------------------------------------------------------------
+Keys:
+- stree_shakti_records
+- stree_shakti_usage
+- stree_shakti_current_shift
+- stree_shakti_shift_history
+- shift_persist_<conductorId>
+
+Notes:
+- Records and shift history are filtered by conductor for shared-device safety.
+- Ticket records are saved locally before backend/cloud sync is attempted.
+- Pending live/cloud sync failures are marked with syncStatus = pending.
+
+------------------------------------------------------------
+4.2) Node SQLite database
+------------------------------------------------------------
+Default path:
+- ./apsrtc_local.db
+
+Tables:
+- ticket_records
+  Stores issued/denied ticket records, passenger metadata, route, vehicle,
+  conductor, usage count, savings/paid amount, and eligibility reason.
+- conductors
+  Stores username, employee ID, encoded password, master photo, and timestamps.
+- active_shifts
+  Stores one active shift per conductor.
+- activity_logs
+  Stores API requests, ticket creation logs, OCR accuracy, scan method, response
+  timing, and error metadata.
+
+------------------------------------------------------------
+4.3) Backend training CSV
+------------------------------------------------------------
+Path:
+- exports/ticket_records_training.csv
+
+Generated by:
+- server.ts and backend/server.ts on startup and after ticket save.
+
+Purpose:
+- Provides an Excel-compatible audit/training extract.
+- Supplies fallback training data for the Python ML service.
+
+Important columns:
+- identity/operations: id, ticket_id, status, route, conductor_id, driver_id,
+  vehicle_no, usage_count
+- verification: verification_method, face_similarity_score,
+  biometric_confidence, liveness_score, ocr_confidence, qr_validation_flag
+- risk: retry_count, time_between_attempts, device_fingerprint_entropy,
+  ip_risk_score, geo_location_shift_flag, event_risk_level, gate_id
+- label: final_decision, where SUCCESS maps to approved and non-success maps to
+  rejected
+
+------------------------------------------------------------
+4.4) ML service database and model artifacts
+------------------------------------------------------------
+ML service DB:
+- ml_service/ml_service.db, configurable through DATABASE_URL.
+
+Model metadata:
+- Stored in the ML service database with version, creation timestamp,
+  training_data_range, PSI metric, performance JSON, and artifact path.
+
+Artifacts:
+- XGBoost: models/<version>/model.bst
+- sklearn fallback: models/<version>/model.joblib
+
+============================================================
+5) Request and learning flows
+============================================================
+------------------------------------------------------------
+5.1) Ticket save flow
+------------------------------------------------------------
+1) Browser saves the ticket to localStorage through storageService.saveRecord().
+2) Browser POSTs the same record to /api/records.
+3) Node writes or replaces the row in ticket_records.
+4) Node writes a TICKET_CREATED activity log.
+5) Node refreshes exports/ticket_records_training.csv.
+6) Node asynchronously POSTs a normalized event to
+   http://localhost:8000/log-verification-event when the ML service is running.
+7) Browser may also sync to the configured live/cloud API when live mode is on.
+
+Failure behavior:
+- Local browser save is the first write and survives backend/API failure.
+- ML event logging is non-blocking and never fails the ticket save response.
+- Live/cloud sync failure marks the browser record as pending.
+
+------------------------------------------------------------
+5.2) ML trust decision flow
+------------------------------------------------------------
+1) Browser calls /api/ml/evaluate through services/mlIssuanceService.ts.
+2) Node normalizes verification features using services/mlDecisionPolicy.ts.
+3) Node attempts POST /predict-trust on the ML service.
+4) Node attempts POST /detect-anomaly on the ML service.
+5) Node computes the TypeScript fallback trust score.
+6) If a model score exists, Node applies a heuristic guard by taking the lower
+   value of model trust score and fallback trust score.
+7) buildMlDecision() returns APPROVE or DENY using:
+   - ML_DENY_TRUST_THRESHOLD or default 0.52
+   - ML_ANOMALY_TRUST_GUARD or default 0.68
+
+If the Node API is unavailable, the browser uses buildFallbackMlDecision() with
+source = client_fallback.
+
+------------------------------------------------------------
+5.3) ML retraining flow
+------------------------------------------------------------
+Training inputs:
+- ML service VerificationLog rows with final_decision labels.
+- Backend CSV at exports/ticket_records_training.csv.
+
+Training behavior:
+- XGBoost is preferred when available.
+- RandomForestClassifier is used when XGBoost or native dependencies fail.
+- Training is skipped unless there are at least 10 rows and both approved and
+  rejected classes are present.
+- Metrics include model_type, validation_mode, accuracy, and roc_auc when
+  computable.
+
+Auto-retraining guardrails:
+- AUTO_RETRAIN_ON_LOG must be enabled.
+- A previous model must exist.
+- Cooldown from latest model must be satisfied.
+- New labeled sample count must meet AUTO_RETRAIN_MIN_NEW_SAMPLES.
+- New approved/rejected counts must meet balance thresholds.
+- Retraining runs in a background thread protected by an in-process lock.
+
+============================================================
+6) API surface
+============================================================
+------------------------------------------------------------
+6.1) Node/Express API
+------------------------------------------------------------
+Health:
+- GET /health
+- GET /api/health
+
+ML decision:
+- POST /api/ml/evaluate
+
+Auth and conductor profile:
+- POST /auth/register
+- POST /auth/login
+- POST /user/update
+
+Shifts:
+- POST /shifts
+- GET /shift/active?conductorId=<id>
+
+Ticket records:
+- POST /records
+- GET /records?conductorId=<id>
+- POST /api/records
+- GET /api/records?conductorId=<id>
+
+Admin/audit:
+- GET /api/admin/raw-logs
+- GET /api/admin/training-sheet
+
+Activity and analytics:
+- GET /api/logs/recent
+- GET /api/logs/activity?limit=<n>&eventType=<type>&userId=<id>
+- GET /api/logs/stats
+- GET /api/logs/ocr-accuracy
+- GET /api/logs/verification?page=<n>&limit=<n>&scanMethod=<method>
+- GET /api/ml-metrics
+
+------------------------------------------------------------
+6.2) Python ML API
+------------------------------------------------------------
+Health:
+- GET /health
+
+Trust and anomaly:
+- POST /predict-trust
+- POST /detect-anomaly
+
+Learning and model operations:
+- POST /log-verification-event
+- POST /retrain-model
+- GET /model-metrics
+- GET /feature-importance
+
+============================================================
+7) Repository layout
+============================================================
+- App.tsx
+  Main React app shell and workflow orchestration.
+- components/
+  UI screens for login, scanner, dashboard, shift setup, tickets, analytics,
+  layout, and server help.
+- services/
+  Browser-side verification, validation, storage, auth, config, geo, and ML
+  decision services.
+- server.ts
+  Integrated Express + Vite server on port 3000.
+- backend/server.ts
+  Split-mode Express API server on port 5001.
+- ml_service/
+  Optional FastAPI ML service, training pipeline, anomaly detection, database
+  models/session, scheduler, and Docker files.
+- analytics/
+  Python analytics helper code.
+- __tests__/
+  Vitest/property tests for workflow helper logic.
+- exports/
+  Generated training CSV output.
+- models/
+  Generated trained ML model artifacts.
+- DATA_AUDIT_RESULTS.md, DATA_INTEGRITY_AUDIT.md, DATA_OVERRIDE_FINDINGS.md
+  Audit and integrity notes.
+
+============================================================
+8) Configuration
+============================================================
+Node/backend environment variables:
+- ML_SERVICE_URL
+  Default: http://localhost:8000
+- TRAINING_SHEET_PATH
+  Default: exports/ticket_records_training.csv
+- DB_PATH
+  Used by backend/server.ts split mode. Default: ./apsrtc_local.db
+- BACKEND_PORT
+  Used by backend/server.ts split mode. Default: 5001
+- ML_DENY_TRUST_THRESHOLD
+  Default: 0.52
+- ML_ANOMALY_TRUST_GUARD
+  Default: 0.68
+
+ML service environment variables:
+- DATABASE_URL
+- MODEL_DIR
+- BACKEND_TRAINING_SHEET
+- RETRAIN_INTERVAL_HOURS
+- DRIFT_THRESHOLD
+- AUTO_RETRAIN_ON_LOG
+- AUTO_RETRAIN_COOLDOWN_HOURS
+- AUTO_RETRAIN_MIN_NEW_SAMPLES
+- AUTO_RETRAIN_MIN_APPROVED_SAMPLES
+- AUTO_RETRAIN_MIN_REJECTED_SAMPLES
+- AUTO_RETRAIN_FORCE
+
+Vite/config notes:
+- vite.config.ts proxies split-mode frontend API traffic to port 5001.
+- GEMINI_API_KEY values are exposed for legacy compatibility, but the primary
+  workflow described here does not require an external AI API key.
+
+============================================================
+9) How to run
+============================================================
+------------------------------------------------------------
+9.1) Install dependencies
+------------------------------------------------------------
+From repository root:
+- npm install
+
+Optional ML dependencies:
+- cd ml_service
+- python -m pip install -r requirements.txt
+
+------------------------------------------------------------
+9.2) Integrated app on port 3000
+------------------------------------------------------------
+From repository root:
+- npm run dev
+
+Open:
+- http://localhost:3000
+- http://localhost:3000/health
+- http://localhost:3000/api/health
+
+------------------------------------------------------------
+9.3) Split frontend/backend mode
+------------------------------------------------------------
+Terminal 1:
+- npm run dev:backend
+
+Terminal 2:
+- npm run dev:frontend
+
+Open:
+- Frontend: http://localhost:3000
+- Backend health: http://localhost:5001/health
+
+------------------------------------------------------------
+9.4) Optional ML service
+------------------------------------------------------------
+From repository root:
+- cd ml_service
+- python -m uvicorn ml_service.main:app --host 0.0.0.0 --port 8000
+
+Open:
+- http://localhost:8000/health
+
+------------------------------------------------------------
+9.5) Docker for ML service
+------------------------------------------------------------
+From repository root:
+- cd ml_service/docker
+- docker-compose up --build -d
+
+This exposes the ML service on host port 8000 and mounts the service/model paths
+defined in ml_service/docker/docker-compose.yml.
+
+============================================================
+10) Verification checklist
+============================================================
+Basic app:
+1) Run npm run lint.
+2) Run npm test.
+3) Start npm run dev and check /health and /api/health.
+4) Log in/register, start a shift, scan or enter passenger data, and save a
+   ticket record.
+5) Confirm /api/records returns the saved record.
+6) Confirm exports/ticket_records_training.csv refreshes.
+
+ML service:
+1) Start the ML service on port 8000.
+2) Check GET /health.
+3) Save ticket records with both SUCCESS and DENIED/FAILED outcomes.
+4) Check POST /log-verification-event responses include auto_retrain details.
+5) Run POST /retrain-model after enough labeled rows exist.
+6) Confirm models/<version>/ contains a model artifact.
+7) Check GET /model-metrics and GET /feature-importance.
+
+Operational safety:
+- Do not make ML service availability mandatory for ticket issuance.
+- Preserve localStorage-first writes for offline operation.
+- Preserve conductor filtering when reading records/photos on shared devices.
+- Keep ticket save and ML event logging decoupled.
+- Review generated CSV columns before using them as production model labels.
+
+============================================================
+END
+============================================================

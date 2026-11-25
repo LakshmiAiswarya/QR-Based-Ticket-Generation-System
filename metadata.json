@@ -1,0 +1,8 @@
+{
+  "name": "Stree Shakti Ticket Portal",
+  "description": "A comprehensive mobile application for issuing free travel tickets to women in Andhra Pradesh under the Stree Shakti scheme, featuring Aadhar QR scanning and AI-powered OCR fallback.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}

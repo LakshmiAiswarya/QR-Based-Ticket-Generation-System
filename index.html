@@ -1,0 +1,192 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Stree Shakti Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    @keyframes bus-drive {
+      0% { transform: translateX(-100%); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateX(500%); opacity: 0; }
+    }
+    @keyframes portrait-breath {
+      0%, 100% { transform: translate(-50%, -50%) scale(1.05); opacity: 0.08; }
+      50% { transform: translate(-50%, -50%) scale(1.12); opacity: 0.12; }
+    }
+    @keyframes logo-shimmer {
+      0% { filter: drop-shadow(0 0 0px rgba(255, 214, 0, 0)); }
+      50% { filter: drop-shadow(0 0 10px rgba(255, 214, 0, 0.5)); }
+      100% { filter: drop-shadow(0 0 0px rgba(255, 214, 0, 0)); }
+    }
+    @keyframes scan-line {
+      0% { top: 0%; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+    @keyframes spin-slow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* ── Premium notification / sheet animations ─────────────────────────── */
+    @keyframes toast-up {
+      from { opacity: 0; transform: translateY(10px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);    }
+    }
+    @keyframes sheet-up {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0);    }
+    }
+    @keyframes fade-in-overlay {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes slide-in-from-bottom-3 {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0);    }
+    }
+    @keyframes slide-in-from-bottom {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0);    }
+    }
+    @keyframes slide-in-from-top {
+      from { transform: translateY(-100%); }
+      to   { transform: translateY(0);     }
+    }
+    @keyframes slide-in-from-top-4 {
+      from { opacity: 0; transform: translateY(-16px); }
+      to   { opacity: 1; transform: translateY(0);     }
+    }
+    @keyframes slide-in-from-right {
+      from { opacity: 0; transform: translateX(16px); }
+      to   { opacity: 1; transform: translateX(0);    }
+    }
+    @keyframes slide-in-from-left {
+      from { opacity: 0; transform: translateX(-16px); }
+      to   { opacity: 1; transform: translateX(0);     }
+    }
+    @keyframes zoom-in {
+      from { opacity: 0; transform: scale(0.94); }
+      to   { opacity: 1; transform: scale(1);    }
+    }
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes slide-in-from-bottom-8 {
+      from { opacity: 0; transform: translateY(32px); }
+      to   { opacity: 1; transform: translateY(0);    }
+    }
+    @keyframes slide-in-from-bottom-12 {
+      from { opacity: 0; transform: translateY(48px); }
+      to   { opacity: 1; transform: translateY(0);    }
+    }
+    @keyframes slide-in-from-top-8 {
+      from { opacity: 0; transform: translateY(-32px); }
+      to   { opacity: 1; transform: translateY(0);     }
+    }
+
+    /* Tailwind animate-in utility shim (used throughout the app) */
+    .animate-in { animation-fill-mode: both; animation-duration: 300ms; }
+    .fade-in           { animation-name: fade-in; }
+    .zoom-in           { animation-name: zoom-in; }
+    .slide-in-from-top          { animation-name: slide-in-from-top; }
+    .slide-in-from-top-4        { animation-name: slide-in-from-top-4; }
+    .slide-in-from-top-8        { animation-name: slide-in-from-top-8; }
+    .slide-in-from-bottom       { animation-name: slide-in-from-bottom; }
+    .slide-in-from-bottom-3     { animation-name: slide-in-from-bottom-3; }
+    .slide-in-from-bottom-8     { animation-name: slide-in-from-bottom-8; }
+    .slide-in-from-bottom-12    { animation-name: slide-in-from-bottom-12; }
+    .slide-in-from-right        { animation-name: slide-in-from-right; }
+    .slide-in-from-left         { animation-name: slide-in-from-left; }
+    .duration-200  { animation-duration: 200ms; }
+    .duration-300  { animation-duration: 300ms; }
+    .duration-500  { animation-duration: 500ms; }
+    .duration-700  { animation-duration: 700ms; }
+    .duration-1000 { animation-duration: 1000ms; }
+    .ease-out { animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+    .animate-bus-drive {
+      animation: bus-drive 10s linear infinite;
+    }
+    .animate-portrait-breath {
+      animation: portrait-breath 12s ease-in-out infinite;
+    }
+    .animate-logo-shimmer {
+      animation: logo-shimmer 4s ease-in-out infinite;
+    }
+    .animate-scan-line {
+      animation: scan-line 2s linear infinite;
+    }
+    .animate-spin-slow {
+      animation: spin-slow 3s linear infinite;
+    }
+    .ticket-gradient-border {
+      background: linear-gradient(to bottom, #D32F2F 0%, #D32F2F 15%, #FFD600 15.5%, #FFD600 16%, #FFFFFF 16.5%);
+    }
+
+    /* Print Styles */
+    @media print {
+      body { background: white !important; }
+      header, nav, .no-print, button {
+        display: none !important;
+      }
+      #root > div { background: white !important; }
+      main { padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+      .ticket-container {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+        margin: 0 auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#D32F2F',
+              yellow: '#FFD600',
+              green: '#2E7D32',
+              dark: '#1A1A1A',
+              cream: '#FAF9F6'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "jsqr": "https://esm.sh/jsqr@1.4.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-[#F0EDE8] text-brand-dark overflow-x-hidden antialiased">
+  <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

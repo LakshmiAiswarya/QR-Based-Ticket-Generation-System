@@ -1,0 +1,82 @@
+ :root {
+  --brand-red: #d32f2f;
+  --brand-yellow: #ffd600;
+  --brand-green: #2e7d32;
+  --brand-dark: #1a1a1a;
+  --brand-cream: #faf9f6;
+  --brand-surface: rgba(255, 255, 255, 0.78);
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  /* Warm neutral desktop background — distinct from the app cream */
+  background: #e8e4de;
+  color: var(--brand-dark);
+  position: relative;
+  /* Center the app column on desktop */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(26, 26, 26, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 26, 26, 0.025) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.3), transparent 80%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 448px;   /* matches max-w-md (28rem = 448px) */
+  min-height: 100vh;
+  /* Subtle card lift on desktop */
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 32px 80px rgba(0,0,0,0.14);
+  background: var(--brand-cream);
+}
+
+/* On true mobile (≤ 448px) remove the desktop shadow */
+@media (max-width: 448px) {
+  #root {
+    box-shadow: none;
+    max-width: 100%;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+*::selection {
+  background: rgba(211, 47, 47, 0.16);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(26, 26, 26, 0.04);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(211, 47, 47, 0.28);
+  border-radius: 999px;
+}

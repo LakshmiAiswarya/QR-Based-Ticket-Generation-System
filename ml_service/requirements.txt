@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+databases
+psycopg2-binary
+pydantic
+xgboost
+scikit-learn
+pandas
+numpy
+apscheduler
+celery
+python-dotenv
+scipy

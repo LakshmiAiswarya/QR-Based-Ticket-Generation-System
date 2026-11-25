@@ -1,0 +1,12 @@
+version: '3'
+services:
+  ml_service:
+    build: .
+    environment:
+      - DATABASE_URL=sqlite:///./ml_service.db
+      - MODEL_DIR=/models
+    volumes:
+      - ./ml_service:/app
+      - ./models:/models
+    ports:
+      - "8000:8000"
