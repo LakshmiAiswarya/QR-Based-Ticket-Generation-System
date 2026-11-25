@@ -1,3 +1,5 @@
+# Stree Shakti Ticket Portal
+
 **QR-based ticket verification system for APSRTC's Stree Shakti free-travel scheme**
 
 An offline-first, mobile-first conductor terminal prototype. Conductors scan a passenger's Aadhaar card, verify identity with on-device face recognition, and issue or deny a ticket, all without an internet connection or any external AI API.
@@ -15,7 +17,7 @@ An offline-first, mobile-first conductor terminal prototype. Conductors scan a p
 4. [Quick Start](#quick-start)
 5. [How OCR and Face Recognition Work](#how-ocr-and-face-recognition-work-no-api)
 6. [Standard Operator Flow](#standard-operator-flow)
-7. [ML Trust Score and Results](#ml-trust-score-and-results)
+7. [ML Trust Score](#ml-trust-score)
 8. [Running the Full Stack](#running-the-full-stack-with-ml-service)
 9. [Split Frontend / Backend Mode](#split-frontend--backend-mode)
 10. [Project Structure](#project-structure)
@@ -25,7 +27,7 @@ An offline-first, mobile-first conductor terminal prototype. Conductors scan a p
 14. [Limitations](#limitations)
 15. [Future Work](#future-work)
 16. [Troubleshooting](#troubleshooting)
-17. [License](#license)
+
 
 ---
 
@@ -36,7 +38,7 @@ An offline-first, mobile-first conductor terminal prototype. Conductors scan a p
 - **Fully offline:** local SQLite storage with automatic sync when connectivity returns
 - **Rule-based eligibility check** plus an **ML trust score** before final approval
 - **Optional FastAPI service** for trust scoring, retraining and model metrics
-- **Tests, TypeScript type-checking and a Render deploy config** included
+- **TypeScript type-checking and a Render deploy config** included.
 
 ## What This App Does
 
@@ -116,7 +118,7 @@ The Euclidean distance between the ID card descriptor and the live selfie descri
 7. The ML trust score is computed locally
 8. The ticket is issued or denied; the record is saved to SQLite and synced when online
 
-## ML Trust Score and Results
+## ML Trust Score 
 
 The trust score combines verification signals (OCR/QR confidence, face-match distance and related features) into a single value that supports the final issue/deny decision. By default a local heuristic (`mlDecisionPolicy.ts`) is used. When the optional FastAPI service is running, the model in `ml_service/` scores requests instead and can be retrained from exported records.
 
@@ -179,7 +181,7 @@ Vite proxies `/api`, `/auth`, `/records`, `/shifts`, `/shift` and `/health` to `
 npm run lint      # TypeScript type-check
 npm run build     # Production build
 npm run preview   # Preview production build
-npm run test      # Run tests
+
 ```
 
 ## Project Structure
@@ -210,7 +212,6 @@ npm run test      # Run tests
 ├── server.ts                        # Integrated Express + Vite (port 3000)
 ├── index.html                       # CDN scripts: Tesseract.js, face-api.js
 ├── ml_training.ipynb                # Model training notebook
-├── __tests__/                       # Automated tests
 └── exports/
     └── ticket_records_training.csv  # ML training data export (sample/synthetic)
 ```
@@ -296,22 +297,7 @@ lsof -i :5001
 
 **Large production bundle warning.** The Vite build warns about bundle size because of TensorFlow.js. The build still succeeds.
 
-#Limitations
-Prototype only: not tested on real buses, with real conductors, or against live APSRTC systems.
-Face recognition accuracy depends on lighting, camera quality and how old the ID photo is.
-OCR on worn or low-quality cards is limited and may need manual entry.
-The ML trust score is trained on limited data, so treat its output as indicative, not authoritative.
-Authentication is basic and meant for demonstration only.
-The TensorFlow.js bundle is large, so the first load is slow on weak networks.
-No liveness detection, so a printed photo or screen image could fool the face check.
 
-#Future Work
-Add liveness detection to resist photo and screen spoofing.
-Role-based authentication and encrypted local storage.
-Conflict-safe offline sync and an admin dashboard for route-level analytics.
-A larger, properly labelled dataset with a documented evaluation method.
-Installable PWA support and a small field pilot to collect real feedback.
-Multi-language conductor interface (Telugu and Hindi).
 
 
 ## Author
