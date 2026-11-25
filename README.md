@@ -305,9 +305,25 @@ lsof -i :5001
 
 **Large production bundle warning.** The Vite build warns about bundle size because of TensorFlow.js. The build still succeeds.
 
+#Limitations
+Prototype only: not tested on real buses, with real conductors, or against live APSRTC systems.
+Face recognition accuracy depends on lighting, camera quality and how old the ID photo is.
+OCR on worn or low-quality cards is limited and may need manual entry.
+The ML trust score is trained on limited data, so treat its output as indicative, not authoritative.
+Authentication is basic and meant for demonstration only.
+The TensorFlow.js bundle is large, so the first load is slow on weak networks.
+No liveness detection, so a printed photo or screen image could fool the face check.
+
+#Future Work
+Add liveness detection to resist photo and screen spoofing.
+Role-based authentication and encrypted local storage.
+Conflict-safe offline sync and an admin dashboard for route-level analytics.
+A larger, properly labelled dataset with a documented evaluation method.
+Installable PWA support and a small field pilot to collect real feedback.
+Multi-language conductor interface (Telugu and Hindi).
 
 
 ## Author
 
 **Thanubuddu Lakshmi Aiswarya**: B.Tech AI & ML, Vignan's Foundation for Science, Technology & Research
-[LinkedIn](#) · [GitHub](https://github.com/LakshmiAiswarya)
+
